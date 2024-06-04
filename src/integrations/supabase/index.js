@@ -1,64 +1,107 @@
 import { createClient } from '@supabase/supabase-js';
-import { useQuery, useMutation, useQueryClient, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_PROJECT_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_API_KEY;
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
-import React from "react";
-export const queryClient = new QueryClient();
-export function SupabaseProvider({ children }) {
-    return React.createElement(QueryClientProvider, { client: queryClient }, children);
-}
+/**
+ * Types for Supabase Tables
+ * 
+ * Table: users
+ * Columns:
+ * - id: uuid
+ * - username: text
+ * - email: text
+ * - created_at: timestamp
+ * 
+ * Table: posts
+ * Columns:
+ * - id: uuid
+ * - user_id: uuid
+ * - title: text
+ * - content: text
+ * - created_at: timestamp
+ * 
+ * Table: comments
+ * Columns:
+ * - id: uuid
+ * - post_id: uuid
+ * - user_id: uuid
+ * - content: text
+ * - created_at: timestamp
+ */
 
-const fromSupabase = async (query) => {
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return data;
+import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
+
+const queryClient = new QueryClient();
+
+export const SupabaseProvider = ({ children }) => (
+  <QueryClientProvider client={queryClient}>
+    {children}
+  </QueryClientProvider>
+);
+
+// Hook for fetching data from a table
+export const useFetchTable = (table, options) => {
+  return useQuery({
+    queryKey: [table],
+    queryFn: async () => {
+      const { data, error } = await supabase.from(table).select('*');
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    ...options,
+  });
 };
 
-/* supabase integration types
-
-// EXAMPLE TYPES SECTION
-// DO NOT USE TYPESCRIPT
-
-Foo // table: foos
-    id: number
-    title: string
-
-Bar // table: bars
-    id: number
-    foo_id: number // foreign key to Foo
-	
-*/
-
-// Example hook for models
-
-export const useFoo = ()=> useQuery({
-    queryKey: ['foo'],
-    queryFn: fromSupabase(supabase.from('foo')),
-})
-export const useAddFoo = () => {
-    const queryClient = useQueryClient();
-    return useMutation({
-        mutationFn: (newFoo)=> fromSupabase(supabase.from('foo').insert([{ title: newFoo.title }])),
-        onSuccess: ()=> {
-            queryClient.invalidateQueries('foo');
-        },
-    });
+// Hook for inserting data into a table
+export const useInsertIntoTable = (table) => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    async (newData) => {
+      const { data, error } = await supabase.from(table).insert(newData);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries([table]);
+      },
+    }
+  );
 };
 
-export const useBar = ()=> useQuery({
-    queryKey: ['bar'],
-    queryFn: fromSupabase(supabase.from('bar')),
-})
-export const useAddBar = () => {
-    const queryClient = useQueryClient();
-    return useMutation({
-        mutationFn: (newBar)=> fromSupabase(supabase.from('bar').insert([{ foo_id: newBar.foo_id }])),
-        onSuccess: ()=> {
-            queryClient.invalidateQueries('bar');
-        },
-    });
+// Hook for updating data in a table
+export const useUpdateTable = (table) => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    async ({ id, newData }) => {
+      const { data, error } = await supabase.from(table).update(newData).eq('id', id);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries([table]);
+      },
+    }
+  );
 };
 
+// Hook for deleting data from a table
+export const useDeleteFromTable = (table) => {
+  const queryClient = useQueryClient();
+  return useMutation(
+    async (id) => {
+      const { data, error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw new Error(error.message);
+      return data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries([table]);
+      },
+    }
+  );
+};
